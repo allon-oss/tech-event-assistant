@@ -8,6 +8,8 @@
 
 ## 本地运行
 
+复盘当前默认使用可解释的规则 / 模板生成，不需要任何 API Key。统一入口为 `src.review_generator.generate_review(data, observations, backend='template')`，已为未来 LLM 生成预留扩展接口。`backend='llm'` 当前只抛出“尚未配置、尚未启用”的 `NotImplementedError`，不会请求外部服务；页面继续使用模板。以后接入 OpenAI、DeepSeek 等模型时，在 `src/llm_provider.py` 适配已有统计摘要与人工观察并返回 Markdown，无须重写页面和统计逻辑；真实调用的安全配置与启用方式需另行实现。
+
 建议使用 Python 3.12。在项目目录创建独立环境并安装依赖。Windows PowerShell：
 
 ```powershell

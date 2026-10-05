@@ -1,6 +1,7 @@
 """Deterministic review facts and prose; no UI, files, or external APIs."""
 import pandas as pd
 
+from src import llm_provider
 from src.metrics import (
     calculate_kpis, channel_performance, field_distribution,
     followup_progress, role_distribution, valuable_mask,
@@ -65,11 +66,26 @@ def channel_observations(summary: dict) -> list[str]:
     return sentences
 
 
-def generate_review(data: pd.DataFrame, observations: dict | None = None) -> str:
-    """Regenerate from the supplied latest data; human text is explicitly attributed."""
+def generate_review(
+    data: pd.DataFrame, observations: dict | None = None, *, backend: str = 'template',
+) -> str:
+    """Generate Markdown from current facts; LLM use is explicitly disabled.
+
+    Backend selection is independent of Local/Demo persistence. Providers receive
+    the shared calculated summary and normalized human observations, not raw rows.
+    """
+    if backend not in ('template', 'llm'):
+        raise ValueError('不支持的复盘生成方式；请选择 template 或 llm。')
     summary = summarize_review(data)
-    kpis = summary['kpis']
     human = {key: str((observations or {}).get(key) or '').strip() for key in OBSERVATION_FIELDS}
+    if backend == 'llm':
+        return llm_provider.generate_review(summary, human)
+    return _generate_template_review(summary, human)
+
+
+def _generate_template_review(summary: dict, human: dict) -> str:
+    """Render calculated facts and explicitly attributed human observations."""
+    kpis = summary['kpis']
     onsite = summary['attended_roles']
     onsite = onsite[onsite['count'].gt(0)].sort_values('count', ascending=False, kind='stable')
     if onsite.empty:
