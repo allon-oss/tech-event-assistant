@@ -1,0 +1,2 @@
+# Keep the verified synthetic baseline byte-for-byte on every platform.
+data/demo_tech_event.csv -text whitespace=cr-at-eol
