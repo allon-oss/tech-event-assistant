@@ -33,12 +33,13 @@ def _export_dialog(draft):
         st.rerun()
 
 
-def render_review_page(data, revision, source):
+def render_review_page(data, revision, source, review_store=None, is_demo=False):
     st.subheader('活动复盘')
-    st.caption('创业者交流 · 数据与人工观察生成本地草稿，正式使用前由你确认。')
+    st.caption('创业者交流 · 数据与人工观察生成草稿，正式使用前由你确认。')
     summary = summarize_review(data)
     st.markdown('### 1. 数据摘要')
-    st.caption(f'当前读取：{source.name} · 每次页面运行读取最新已保存数据。关系跟进页的未保存编辑不参与统计。')
+    source_name = source if isinstance(source, str) else source.name
+    st.caption(f'当前读取：{source_name} · 每次页面运行读取最新已保存数据。关系跟进页的未保存编辑不参与统计。')
     results = [('报名人数', str(summary['kpis']['registered'])),
                ('到场人数', str(summary['kpis']['attended'])),
                ('到场率', format_rate(summary['kpis']['attendance_rate'])),
@@ -70,7 +71,8 @@ def render_review_page(data, revision, source):
     if summary['paused']:
         st.caption(f'另有暂不跟进 {summary["paused"]} 人，仍计入明确对接价值总数。')
 
-    review_store = ReviewStore()
+    if review_store is None:
+        review_store = ReviewStore()
     if 'review_draft' not in st.session_state:
         try:
             draft, saved_revision = review_store.load()
@@ -98,7 +100,7 @@ def render_review_page(data, revision, source):
         else:
             _replace_editor(data, revision)
     if st.session_state.get('review_confirm_regenerate'):
-        st.warning('重新生成将替换当前未保存的草稿内容，也会替换编辑区中的已加载版本。此前保存的文件在再次点击保存前保持不变。')
+        st.warning('重新生成将替换当前未保存的草稿内容，也会替换编辑区中的已加载版本。此前保存的草稿在再次点击保存前保持不变。')
         confirm, cancel = st.columns(2)
         if confirm.button('确认重新生成', key='confirm_regenerate_review'):
             _replace_editor(data, revision)
@@ -127,11 +129,14 @@ def render_review_page(data, revision, source):
                 draft, st.session_state['review_saved_revision'],
             )
             st.session_state['review_saved_text'] = draft
-            st.success('复盘草稿已保存，刷新或重启应用后可继续读取。')
+            st.success('复盘草稿已保存在当前会话，请下载保留；刷新后会重置。' if is_demo
+                       else '复盘草稿已保存，刷新或重启应用后可继续读取。')
         except ReviewStoreError as error:
             st.error(str(error))
     if export.button('导出 Markdown', key='prepare_review_export', disabled=not draft.strip()):
         _export_dialog(draft)
     if draft != st.session_state['review_saved_text']:
         st.caption('当前草稿有未保存的修改。')
-    st.caption('保存位置：data/event_review_draft.md。导出包含当前编辑后的正文，无须先保存。')
+    st.caption(('保存位置：你的当前会话，不写入公共文件；刷新后会重置。' if is_demo
+                else '保存位置：data/event_review_draft.md。')
+               + '导出包含当前编辑后的正文，无须先保存。')

@@ -1,5 +1,6 @@
 """Exercise rendered KPIs, page routing, chart traces, and filter intersections."""
 from pathlib import Path
+import os
 import unittest
 import tempfile
 from unittest.mock import patch
@@ -32,6 +33,9 @@ class ChartTests(unittest.TestCase):
 
 class AppTests(unittest.TestCase):
     def setUp(self):
+        mode_patch = patch.dict(os.environ, {'APP_MODE':'local'})
+        mode_patch.start()
+        self.addCleanup(mode_patch.stop)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.working = Path(temporary.name) / 'working.csv'

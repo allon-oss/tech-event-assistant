@@ -1,4 +1,4 @@
-"""Streamlit presentation for the local V0.3 event workflow."""
+"""Streamlit event workflow with local persistence or isolated public sessions."""
 import hashlib
 import streamlit as st
 
@@ -13,6 +13,8 @@ from src.visualizations import channel_chart, field_chart, role_chart
 
 from src.followup_store import FollowupStore, OWNER_DISPLAY_NAMES, TABLE_LABELS, display_followups
 from src.review_page import render_review_page
+from src.app_mode import get_app_mode
+from src.session_store import SessionFollowupStore, SessionReviewStore
 
 
 def restore_controls(store):
@@ -39,23 +41,34 @@ def restore_controls(store):
 
 st.set_page_config(page_title='科技创业活动观察与跟进助手', page_icon='📋', layout='wide')
 
+try:
+    mode = get_app_mode()
+except DataValidationError as error:
+    st.error(str(error))
+    st.stop()
+is_demo = mode == 'demo'
+
 st.sidebar.title('活动工作台')
-st.sidebar.caption('创业者交流 · V0.3')
+st.sidebar.caption('创业者交流 · V1.0 作品集 Demo')
 page = st.sidebar.radio('页面', ['活动总览', '活动观察', '关系跟进', '活动复盘'], key='page')
 st.sidebar.divider()
-st.sidebar.caption('Synthetic Demo Data\n\n本地 CSV · 跟进与复盘工作流')
+st.sidebar.caption('Synthetic Demo Data\n\n' + ('Demo Mode · 当前会话' if is_demo else 'Local Mode · 本地保存'))
 
 st.title('科技创业活动观察与跟进助手')
 st.markdown('从报名与签到数据中快速观察活动表现，并沉淀后续关系跟进。')
-st.info('当前展示数据为 Synthetic Demo Data，仅用于产品流程验证。')
+st.info('作品集 Demo · Synthetic Demo Data：人物、公司和项目均为虚构，没有真实客户数据。')
+if is_demo:
+    st.caption('演示修改仅保存在你的当前会话，其他访问者不可见。刷新、断开会话或服务重启后会重置，请及时下载需要保留的内容。')
 
-store = FollowupStore()
 try:
+    store = SessionFollowupStore(st.session_state) if is_demo else FollowupStore()
     data, revision = store.load()
 except DataValidationError as error:
     st.error(str(error))
-    st.caption('请修正本地 CSV 后刷新页面。字段说明见 data/DATA_DICTIONARY.md。')
-    restore_controls(store)
+    st.caption('演示数据暂时不可用，请稍后刷新。' if is_demo
+               else '请修正本地 CSV 后刷新页面。字段说明见 data/DATA_DICTIONARY.md。')
+    if not is_demo:
+        restore_controls(store)
     st.stop()
 
 if 'feedback' in st.session_state:
@@ -158,4 +171,7 @@ elif page == '关系跟进':
     restore_controls(store)
 
 elif page == '活动复盘':
-    render_review_page(data, revision, store.current_path())
+    render_review_page(
+        data, revision, '当前会话数据（原始 Synthetic Demo CSV）' if is_demo else store.current_path(),
+        review_store=SessionReviewStore(st.session_state) if is_demo else None, is_demo=is_demo,
+    )

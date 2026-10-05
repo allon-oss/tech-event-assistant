@@ -1,5 +1,6 @@
 """Exercise the actual Streamlit review workflow using isolated saved files."""
 from pathlib import Path
+import os
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -15,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ReviewPageTests(unittest.TestCase):
     def setUp(self):
+        mode_patch = patch.dict(os.environ, {'APP_MODE':'local'})
+        mode_patch.start()
+        self.addCleanup(mode_patch.stop)
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.draft_path = Path(temp.name) / 'review.md'

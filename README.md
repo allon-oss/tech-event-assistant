@@ -1,16 +1,19 @@
 # 科技创业活动观察与跟进助手
 
-从报名与签到数据中快速观察活动表现，并沉淀后续关系跟进。
+用于科技 / 创业活动的 **观察 → 跟进 → 复盘**：从报名与签到数据观察活动表现，记录会后关系跟进，再结合人工观察整理复盘。
 
-**V0.3 · 本地 CSV 跟进与活动复盘工作流**
+**V1.0 · 作品集 Demo · Local / Demo 双模式**
 
-当前展示数据为 **Synthetic Demo Data，仅用于产品流程验证**。活动名称为「创业者交流」。本项目帮助主办方观察报名与到场规模、参与者结构、渠道表现、会后跟进，并结合人工观察整理可编辑复盘草稿。
+当前项目是作品集 Demo，全部内置数据为 **Synthetic Demo Data（合成演示数据）**，没有真实客户数据。人物、公司、项目和负责人均为虚构演示内容，不代表真实活动或业务成果。活动名称为「创业者交流」。暂未接入 LLM、Agent、RAG、数据库和登录系统，不需要 API Key。
 
 ## 本地运行
 
-当前电脑的项目虚拟环境已经准备好。在项目目录打开 PowerShell，运行：
+建议使用 Python 3.12。在项目目录创建独立环境并安装依赖。Windows PowerShell：
 
 ```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:APP_MODE = "local"
 .\.venv\Scripts\python.exe -m streamlit run app.py
 ```
 
@@ -18,19 +21,48 @@
 
 默认只监听本机 `127.0.0.1`，不对局域网开放。Streamlit 使用统计已关闭。应用不调用大模型 API，不需要 API Key。
 
-### 在其他电脑重新安装
+### Linux / macOS
 
-建议使用 Python 3.12。`.venv` 与本机 Python 关联，不要复制它到其他电脑，也不要提交它。安装 Python 后，在项目根目录执行：
+在项目根目录执行：
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m streamlit run app.py
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+APP_MODE=local .venv/bin/python -m streamlit run app.py
 ```
 
-如果电脑使用 `python` 而不是 `py` 命令，第一行可替换为 `python -m venv .venv`。当前开发电脑没有全局 Python，现有环境由 Codex 附带的 Python 创建；若该运行时移动或删除，需要用新安装的 Python 重建环境。
+使用自己的 Python 创建环境，不复制其他电脑的 `.venv`。数据与草稿路径通过模块所在位置定位，不依赖本机用户名、Windows 绝对路径或启动目录。
 
 已验证环境：Python 3.12.14、Streamlit 1.65.0、Pandas 3.0.6、Plotly 6.9.0。三个直接依赖固定在 `requirements.txt` 中。
+
+## Local / Demo Mode
+
+| 模式 | 选择方式 | 跟进与复盘保存 | 刷新 / 重启 |
+| --- | --- | --- | --- |
+| Local Mode | `APP_MODE=local`，未配置时的默认值 | 本地 working CSV 和 Markdown 草稿 | 已保存内容保留 |
+| Demo Mode | `APP_MODE=demo` | 每个访问者独立的 `st.session_state` | 会话结束后重置，须提前下载 |
+
+两种模式使用相同的校验、KPI、复盘模板和下载逻辑。Demo Mode 只读取原始合成 CSV，忽略磁盘上的 working CSV 和草稿；编辑数据、人工输入与保存稿仅属于当前会话，不使用共享可变缓存。不同访问者不能看到彼此修改。保存、恢复和下载都不写公共文件，原始 CSV 永远不被应用修改。
+
+在 PowerShell 中设置 `$env:APP_MODE = "demo"` 后按上述命令启动，即可在本机预览 Demo Mode。Linux 使用 `APP_MODE=demo .venv/bin/python -m streamlit run app.py`。切换模式后重新启动服务。Demo 刷新会失去修改，这是会话演示的预期行为；CSV 下载使用本会话已保存跟进，Markdown 下载包含当前编辑正文和未保存修改。[Streamlit 会话说明](https://docs.streamlit.io/develop/api-reference/caching-and-state/st.session_state)
+
+### 后续公网部署配置（本轮未部署）
+
+入口为 `app.py`，Python 选择 3.12，安装根目录 `requirements.txt`。公网必须设置 `APP_MODE=demo`；Local Mode 仅适合本地单用户。非法模式值会停止页面，不会静默回退到文件保存。
+
+在 Streamlit Community Cloud 的应用设置 / Secrets 填入下面的非敏感模式配置即可；代码优先读取环境变量，没有环境变量时读取 `st.secrets`。不需要创建或提交本地 secrets 文件。[官方配置说明](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management)
+
+```toml
+APP_MODE = "demo"
+```
+
+仓库的 `.streamlit/config.toml` 保留本地 `127.0.0.1` 监听。Community Cloud 由平台管理启动；其他 Linux 托管环境应在启动命令覆盖监听地址和平台要求的端口，例如：
+
+```bash
+APP_MODE=demo python -m streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+```
+
+依赖包含 Linux 安装包；Pandas 3.0.6 的 x86-64 Linux wheel 要求 glibc 2.24 或更新版本，使用现代 Linux 镜像。[Pandas 安装包](https://pypi.org/project/pandas/3.0.6/)
 
 ## 页面与操作
 
@@ -49,7 +81,9 @@ py -3.12 -m venv .venv
 
 界面负责人使用虚构演示名「林舟」「小林」「Mia」。第一位负责人在界面使用别名映射，筛选仍匹配原始数据键，原 CSV 和数据字典保持不变。表格显示和 CSV 导出均使用界面别名。
 
-## 保存、恢复与导出
+## Local Mode 保存、恢复与导出
+
+本节和下一节的磁盘保存说明适用于 Local Mode。Demo Mode 的相同按钮仅保存到当前访问者会话，页面会显示会话保存提示；刷新和服务重启后不能恢复。
 
 `src/followup_store.py` 优先读取 `data/demo_tech_event_working.csv`；不存在时读取原始 `data/demo_tech_event.csv`。首次保存会创建 working 文件，后续保存更新该文件。原始 CSV 和原始数据字典均保持不变。
 
@@ -61,7 +95,7 @@ py -3.12 -m venv .venv
 
 限制：CSV 适用于本地单用户流程，没有多人并发事务保障；多个标签页同时编辑应先刷新。原生表格的未提交单元格、未点击保存的编辑不持久化；手机或窄窗口需横向滚动，长备注建议进入单元格查看。当前版本没有自动保存或编辑历史。
 
-## 活动复盘操作与规则
+## 活动复盘操作与规则（磁盘说明适用于 Local Mode）
 
 流程：打开「活动复盘」→ 查看最新数据摘要 → 按需填写活动亮点、活动问题、渠道人工判断、重点关系、改进建议 → 点击「生成复盘草稿」→ 编辑正文 → 保存或导出。
 
@@ -125,6 +159,8 @@ tech-event-assistant/
 │   ├── metrics.py               # KPI、分组统计、跟进筛选与排序
 │   ├── visualizations.py        # 三个 Plotly 图
 │   ├── followup_store.py        # working 选择、校验合并、保存、恢复与导出
+│   ├── app_mode.py              # 环境变量 / Cloud 配置选择模式
+│   ├── session_store.py         # Demo 会话存储，不写文件
 │   ├── review_generator.py      # 复盘事实汇总、模板生成、人工内容归属
 │   ├── review_store.py          # Markdown 读取、版本检查与原子保存
 │   └── review_page.py           # 三个区域、会话编辑、替换确认、保存与导出 UI
@@ -139,7 +175,8 @@ tech-event-assistant/
 │   ├── test_followup_store.py
 │   ├── test_review_generator.py
 │   ├── test_review_store.py
-│   └── test_review_page.py
+│   ├── test_review_page.py
+│   └── test_demo_mode.py         # 会话隔离、下载、无文件写入、模式与路径
 ├── docs/superpowers/plans/
 │   ├── 2026-10-04-v01.md
 │   ├── 2026-10-05-v02.md        # V0.2 实施与验收记录
@@ -180,12 +217,16 @@ V0.3 验证记录：**47 项自动测试全部通过**（原有 27 项 + 新增 
 
 ## 版本范围与保存
 
+V1.0 收尾验证：**54 项自动测试通过（原有 47 + 新增 7）**。覆盖两个访问者的独立跟进 / 人工输入 / 草稿、保存后 KPI 和复盘统计同步、CSV 下载 22 条最新跟进、Markdown 包含最后未保存的编辑、取消 / 确认恢复、忽略已存在的 Local 文件、Demo 不创建 working CSV 或草稿、原始 CSV 字节不变、无效模式停止、缺失数据友好提示、从其他目录启动，以及 Cloud 模式配置与环境变量优先级。Local 页面测试显式使用 Local Mode，测试命令不受启动终端的 APP_MODE 影响。
+
+`pip check` 和 Linux Python 3.12 安装预检通过：38 项直接 / 间接依赖可以解析为现代 x86-64 Linux wheels；本轮未在 Linux 实机或公网运行。当前文件和全部 Git 历史检查未发现需阻止公开的敏感内容，本地生成文件不属于提交范围。详细范围与证据见 [V1.0 收尾检查记录](docs/V1_RELEASE_CHECK.md)。
+
 V0.3 增加基于数据与人工观察的模板复盘，保留 V0.1 / V0.2 功能。不包含大模型 API、数据库 / SQL、登录、RAG、Agent、Docker 或预测。没有推送到 GitHub。
 
-本阶段完成后建议检查并保存一次 Git 版本。当前目录已初始化本地 Git，并保存 V0.2 稳定版本。提交前检查 `.gitignore` 和暂存范围，确认不包含 working CSV、`.env`、密钥、虚拟环境或运行日志。后续修改功能时同步更新本文的启动步骤、指标口径和验证记录。
+V0.3 已保存为本地提交 `2b17279`（`feat: complete v0.3 event review workflow`）。V1.0 仅增加公开演示隔离、部署兼容说明和必要验证，不新增业务页面；经用户确认，以 `chore: prepare v1.0 for public demo` 保存本地 Git。修改功能时同步更新本文的启动步骤、指标口径和验证记录。
 
 独立代码审查：核心流程未发现阻塞问题。审查发现的临时文件清理失败可能覆盖友好保存提示问题，已补充失败复现测试并修复，最终完整测试 27/27 通过。当前无遗留问题；单用户 CSV 与原生编辑器限制如上。
 
-本地版本保存：提交信息为 `feat: complete v0.2 follow-up workflow`。`.gitignore` 另排除通用临时文件、IDE 配置和本地工具配置目录；只保留经检查的共用 Streamlit 主题与本机启动配置 `.streamlit/config.toml`。未配置 GitHub 远程仓库，未推送。
+`.gitignore` 排除 `.env*`、working CSV、复盘草稿、虚拟环境、缓存、日志、临时文件和本地配置目录；只保留 `.streamlit/config.toml` 共用主题与本地监听配置。未创建 GitHub 远程仓库，未推送或部署。
 
 `.gitattributes` 禁止 Git 自动转换原始 Demo CSV 的换行，保留已验证的文件字节与 SHA256。

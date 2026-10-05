@@ -89,6 +89,10 @@ class FollowupStore:
         merged = indexed.reset_index()[list(REQUIRED_COLUMNS)]
         merged = validate_data(merged)
         self._check_baseline(merged, load_data(self.demo_path))
+        self._save_data(merged, revision)
+
+    def _save_data(self, merged: pd.DataFrame, revision: str) -> None:
+        """Persist a fully validated merge; demo storage overrides this boundary."""
         temporary = None
         failure = None
         try:
