@@ -10,8 +10,7 @@ __pycache__/
 .tox/
 .nox/
 .ipynb_checkpoints/
-.env
-.env.*
+.env*
 .streamlit/*
 !.streamlit/config.toml
 .codex/
@@ -31,6 +30,7 @@ __pycache__/
 .coverage
 htmlcov/
 data/demo_tech_event_working.csv
+data/event_review_draft.md
 *.tmp
 *.temp
 *.bak

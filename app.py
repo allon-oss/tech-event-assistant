@@ -1,4 +1,4 @@
-"""Streamlit presentation for the local V0.2 follow-up workflow."""
+"""Streamlit presentation for the local V0.3 event workflow."""
 import hashlib
 import streamlit as st
 
@@ -12,6 +12,7 @@ from src.metrics import (
 from src.visualizations import channel_chart, field_chart, role_chart
 
 from src.followup_store import FollowupStore, OWNER_DISPLAY_NAMES, TABLE_LABELS, display_followups
+from src.review_page import render_review_page
 
 
 def restore_controls(store):
@@ -39,10 +40,10 @@ def restore_controls(store):
 st.set_page_config(page_title='科技创业活动观察与跟进助手', page_icon='📋', layout='wide')
 
 st.sidebar.title('活动工作台')
-st.sidebar.caption('创业者交流 · V0.2')
-page = st.sidebar.radio('页面', ['活动总览', '活动观察', '关系跟进'], key='page')
+st.sidebar.caption('创业者交流 · V0.3')
+page = st.sidebar.radio('页面', ['活动总览', '活动观察', '关系跟进', '活动复盘'], key='page')
 st.sidebar.divider()
-st.sidebar.caption('Synthetic Demo Data\n\n本地 CSV · 跟进工作流')
+st.sidebar.caption('Synthetic Demo Data\n\n本地 CSV · 跟进与复盘工作流')
 
 st.title('科技创业活动观察与跟进助手')
 st.markdown('从报名与签到数据中快速观察活动表现，并沉淀后续关系跟进。')
@@ -96,7 +97,7 @@ elif page == '活动观察':
     st.caption('蓝色柱形读左轴人数，棕色折线读右轴到场率；渠道应同时比较规模与到场表现。')
     st.plotly_chart(channel_chart(channel_performance(data)), width='stretch', key='channels', config={'displayModeBar': False})
 
-else:
+elif page == '关系跟进':
     st.subheader('关系跟进')
     st.caption('仅展示已到场且有明确对接意向的对象。待跟进优先，暂不跟进排在最后。')
     for column, (label, count) in zip(st.columns(4), followup_progress(data).items()):
@@ -155,3 +156,6 @@ else:
     except DataValidationError as error:
         st.error(str(error))
     restore_controls(store)
+
+elif page == '活动复盘':
+    render_review_page(data, revision, store.current_path())
