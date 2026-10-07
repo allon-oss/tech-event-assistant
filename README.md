@@ -2,7 +2,7 @@
 
 用于科技 / 创业活动的 **观察 → 跟进 → 复盘**：从报名与签到数据观察活动表现，记录会后关系跟进，再结合人工观察整理复盘。
 
-**V1.0 · 作品集 Demo · Local / Demo 双模式**
+**V1.0 · 作品集 Demo · Local / Demo 双模式 · CSV / XLSX 会话上传**
 
 当前项目是作品集 Demo，全部内置数据为 **Synthetic Demo Data（合成演示数据）**，没有真实客户数据。人物、公司、项目和负责人均为虚构演示内容，不代表真实活动或业务成果。活动名称为「创业者交流」。暂未接入 LLM、Agent、RAG、数据库和登录系统，不需要 API Key。
 
@@ -21,6 +21,14 @@ $env:APP_MODE = "local"
 
 打开 <http://127.0.0.1:8501>。如果服务已经运行，直接访问即可；在自行启动的终端按 `Ctrl+C` 可以停止。若 8501 被其他应用占用，可在命令末尾加 `--server.port 8502`，然后访问对应端口。
 
+Windows 日常使用可直接双击 `start_app.bat`。脚本会检查环境、选择空闲端口，通过 `launch_app.py` 调用同一虚拟环境中的 `pythonw.exe` 启动无控制台的后台服务，等健康检查通过后再自动打开浏览器，不需要按 Enter。正常情况下启动窗口随后自动退出，不会另留一个运行服务的空白终端；若 Windows Terminal 保留已结束的标签页，关闭它也不会停止后台服务。请等浏览器显示完整页面后再关闭启动窗口。使用中回到原浏览器标签页即可，无须反复双击；再次双击会在另一个空闲端口启动新的实例和会话。后台服务在 Windows 注销/关机或手动结束对应进程时停止，不设置开机自启。
+
+如需手动停止后台服务，先下载所需的跟进表/草稿，再在任务管理器的「详细信息」中，根据「命令行」找到包含本项目完整路径及 `streamlit run` 的 `pythonw.exe` 进程并结束它；不要结束其他项目的 Python。若希望直接用 `Ctrl+C` 停止，仍可使用上面的终端启动命令，并保持该终端窗口开启。
+
+遇到 **Connection error / Streamlit server is not responding** 时，表示当前页面无法连接后台服务，不等于 CSV 校验失败。2026-10-07 复现发现：仅使用 `DETACHED_PROCESS` 启动 Windows 虚拟环境的 `python.exe` 不够，它会转而启动真正的解释器，并重新创建一个控制台；关闭这个空白终端仍会停止服务。现在使用同一环境的 `pythonw.exe`，避免创建该控制台。相关行为可对照 [CPython 3.12 的 Windows 启动器源码](https://github.com/python/cpython/blob/3.12/PC/launcher.c)。服务日志保存在 `streamlit-端口号.log`（例如 `streamlit-8501.log`），已被 Git 忽略规则排除。服务停止后重新启动，再打开启动器提示的地址，或刷新旧的断线页面。旧服务的上传数据仅在内存中，服务退出后须重新上传；不会为了恢复会话而把上传内容写入项目文件。
+
+2026-10-07 启动修复验证：完整 **86 项测试通过（业务测试 80 + 启动器 6）**。覆盖启动器正常退出和被强制结束后 HTTP 服务仍响应、故障日志可读取、子进程提前退出、启动超时，以及保持本机监听和现有安全设置。新增 Windows 回归测试确认真正运行的解释器没有控制台，并仍从项目虚拟环境加载 Streamlit；此测试在旧实现下失败，在改为 `pythonw.exe` 后通过。实际执行 `start_app.bat` 后，确认启动命令已退出，两个服务进程均无控制台（Windows `AttachConsole` 返回 `ERROR_INVALID_HANDLE`），健康接口仍响应，浏览器切换到活动复盘后再返回总览正常。前面的上传验收已验证 20 条测试 CSV 的校验、预览、确认及页面切换。启动器不新增第三方依赖。[Python subprocess 文档](https://docs.python.org/3/library/subprocess.html)；[Windows 控制台诊断说明](https://learn.microsoft.com/en-us/windows/console/attachconsole)。
+
 默认只监听本机 `127.0.0.1`，不对局域网开放。Streamlit 使用统计已关闭。应用不调用大模型 API，不需要 API Key。
 
 ### Linux / macOS
@@ -35,7 +43,7 @@ APP_MODE=local .venv/bin/python -m streamlit run app.py
 
 使用自己的 Python 创建环境，不复制其他电脑的 `.venv`。数据与草稿路径通过模块所在位置定位，不依赖本机用户名、Windows 绝对路径或启动目录。
 
-已验证环境：Python 3.12.14、Streamlit 1.65.0、Pandas 3.0.6、Plotly 6.9.0。三个直接依赖固定在 `requirements.txt` 中。
+已验证环境：Python 3.12.14、Streamlit 1.65.0、Pandas 3.0.6、Plotly 6.9.0、openpyxl 3.1.5、defusedxml 0.7.1。五个直接依赖固定在 `requirements.txt` 中。
 
 ## Local / Demo Mode
 
@@ -83,9 +91,47 @@ APP_MODE=demo python -m streamlit run app.py --server.address 0.0.0.0 --server.p
 
 界面负责人使用虚构演示名「林舟」「小林」「Mia」。第一位负责人在界面使用别名映射，筛选仍匹配原始数据键，原 CSV 和数据字典保持不变。表格显示和 CSV 导出均使用界面别名。
 
+## 上传自己的活动数据
+
+默认仍使用 **Synthetic Demo Data**。侧边栏选择「上传自己的数据」，先上传文件、查看校验结果及前 20 条预览，再点击「确认使用这份数据」。确认后，现有四个页面共同使用这份数据；更换文件后，未确认或校验失败时仍保留上次已确认的数据。
+
+「下载数据模板」提供 UTF-8 BOM CSV 空白表头，没有示例人物。用 Excel 填写后可保存为 CSV 或 XLSX。CSV 支持 UTF-8、UTF-8 BOM 和 GB18030；XLSX 只读取**第一个工作表**，不执行公式，有公式或错误单元格时请先粘贴为值。上限为 5 MB、10,000 条记录、100 列；无法识别的格式、重复列名、重复编号、缺字段、到场或跟进逻辑矛盾会给出中文提示，不展示 Python 异常。
+
+| 英文列名 | 中文列名示例 | 要求 |
+| --- | --- | --- |
+| `name` | 姓名、参会者姓名、名字 | 必填，单元格不可空 |
+| `role` | 身份、角色、参会身份 | 必填；自定义身份原样保留 |
+| `registration_channel` | 报名渠道、渠道、报名来源 | 必填；自定义渠道参与统计 |
+| `attended` | 是否到场、是否签到、签到状态 | 必填；支持是/否、已签到/未签到、true/false、yes/no、1/0 |
+| `attendee_id` | 报名编号、编号、参会编号 | 可选；缺失或空白时生成不冲突的编号 |
+| `organization` | 公司 / 项目、公司、机构 | 可选 |
+| `startup_stage` | 项目阶段、创业阶段 | 可选 |
+| `field` | 方向、创业方向、关注方向、行业 | 可选；自定义方向参与统计 |
+| `connection_intent` | 对接意向、对接需求 | 可选；非空时使用现有意向选项 |
+| `followup_status` | 当前跟进状态、跟进状态 | 可选；非空时使用现有状态选项 |
+| `followup_owner` | 跟进负责人、负责人 | 可选；原样保留实际姓名 |
+| `next_action` | 下一步动作、跟进动作 | 可选 |
+| `notes` | 备注 | 可选 |
+
+其余可选信息缺失时保留空白，不补造公司、意向、负责人或下一步动作。方向统计排除空白；明确对接价值和跟进指标只统计明确填写的数据，复盘中说明缺失信息。未填写意向不会被解释为「没有需求」。未知列不参与分析。中文/英文列同时映射到同一字段时拒绝导入，避免误选一列。
+
+对接意向支持：寻找投资、寻找创业者、寻找合作伙伴、招聘 / 人才、行业交流、暂无明确需求、未到场。跟进状态支持：待跟进、已初步建联、跟进中、已完成对接、暂不跟进、未到场。意向已明确、跟进状态未填写的到场者仍出现在关系跟进表；可直接填写负责人及动作。进行中的跟进须有明确对接意向、负责人和具体动作；已完成对接或暂不跟进须清空负责人，动作留空或填写「暂无」。未到场记录的意向、状态、动作只能留空或填写「未到场」。
+
+**保存与隔离：**上传内容由内存字节流解析，预览和确认后的工作副本均保存在当前访问者的 `st.session_state`；上传数据没有共享缓存、模块级可变数据或磁盘后端。上传后的跟进保存和复盘保存同样只在当前 session 内，**Local Mode 也不落盘**。不同访问者的上传、跟进、人工输入和草稿相互隔离。不会覆盖 Demo CSV，不创建 working CSV 或本地复盘文件。
+
+切回「使用演示数据」可恢复该会话原来的 Demo 编辑状态，上传数据及其草稿单独保留，切回上传模式可继续。确认另一份文件会替换上次上传的数据、跟进和复盘内容，界面会提前说明；请先导出需要保留的内容。刷新产生新会话、会话过期或服务重启后无法恢复上传内容。保留原始上传文件，并及时下载跟进表或 Markdown 草稿。
+
+上传模式的「导出最新跟进表」会为以 `=`、`+`、`-`、`@` 开头的文本添加单引号前缀，避免下载文件中的文字被 Excel 直接作为公式解释；会话中的原始文字不变。请使用这个业务导出按钮保留跟进数据。
+
+新增解析依赖 `openpyxl` 和 `defusedxml`（Excel XML 安全解析），重新启动前执行 `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`。[openpyxl 官方说明](https://openpyxl.readthedocs.io/en/stable/)；[Streamlit 文件上传组件](https://docs.streamlit.io/develop/api-reference/widgets/st.file_uploader)。不接入数据库或 LLM，不增加业务页面。
+
+仓库提供 `活动上传测试数据_20条.csv` 和 `活动上传测试数据_300人.csv`，每条记录均标注为虚构测试数据。300 人样本的预期指标为：报名 300、到场 210、到场率 70%、到场创业者 90、明确对接价值 150、待跟进 60；预览只展示前 20 条，确认后按全部 300 条分析。这些样本用于功能测试，不代表真实活动成果或多人并发性能测试。
+
+浏览器下载的复盘与跟进表可能包含人工填写的信息。保存在项目根目录且名称匹配 `*_活动复盘*.md`、`*_最新跟进表*.csv` 的文件已被 Git 忽略；原有 working CSV、草稿、日志和私密配置也继续排除。自选文件名或另存目录的真实名单仍须在提交前逐项检查，不应直接放入公开仓库。
+
 ## Local Mode 保存、恢复与导出
 
-本节和下一节的磁盘保存说明适用于 Local Mode。Demo Mode 的相同按钮仅保存到当前访问者会话，页面会显示会话保存提示；刷新和服务重启后不能恢复。
+本节和下一节的磁盘保存说明仅适用于 Local Mode 的演示数据。Demo Mode，以及任何模式下的上传数据，相同按钮仅保存到当前访问者会话，页面会显示会话保存提示；新会话和服务重启后不能恢复。
 
 `src/followup_store.py` 优先读取 `data/demo_tech_event_working.csv`；不存在时读取原始 `data/demo_tech_event.csv`。首次保存会创建 working 文件，后续保存更新该文件。原始 CSV 和原始数据字典均保持不变。
 
@@ -155,6 +201,8 @@ KPI 和图表数据均在 `src/metrics.py` 中从输入数据计算。以上数�
 ```text
 tech-event-assistant/
 ├── app.py                       # 现有页面与四页导航
+├── launch_app.py                # Windows 无控制台后台启动、就绪检查与故障日志
+├── start_app.bat                # Windows 双击入口
 ├── src/
 │   ├── __init__.py
 │   ├── data_loader.py           # CSV 读取与校验
@@ -163,6 +211,9 @@ tech-event-assistant/
 │   ├── followup_store.py        # working 选择、校验合并、保存、恢复与导出
 │   ├── app_mode.py              # 环境变量 / Cloud 配置选择模式
 │   ├── session_store.py         # Demo 会话存储，不写文件
+│   ├── upload_data.py           # CSV / XLSX 解析、中英文映射与校验
+│   ├── upload_session.py        # 上传工作副本、跟进与草稿会话隔离
+│   ├── upload_page.py           # 模板下载、上传预览与确认
 │   ├── review_generator.py      # 复盘事实汇总、模板生成、人工内容归属
 │   ├── review_store.py          # Markdown 读取、版本检查与原子保存
 │   └── review_page.py           # 三个区域、会话编辑、替换确认、保存与导出 UI
@@ -178,20 +229,30 @@ tech-event-assistant/
 │   ├── test_review_generator.py
 │   ├── test_review_store.py
 │   ├── test_review_page.py
-│   └── test_demo_mode.py         # 会话隔离、下载、无文件写入、模式与路径
+│   ├── test_demo_mode.py         # 会话隔离、下载、无文件写入、模式与路径
+│   ├── test_review_backends.py
+│   ├── test_upload_data.py
+│   ├── test_upload_session.py
+│   └── test_launcher.py
 ├── docs/superpowers/plans/
 │   ├── 2026-10-04-v01.md
 │   ├── 2026-10-05-v02.md        # V0.2 实施与验收记录
 │   └── 2026-10-05-v03.md        # V0.3 实施与验收记录
 ├── .streamlit/config.toml       # 本地监听、使用统计与主题
 ├── .gitignore
+├── 活动上传测试数据_20条.csv       # 虚构上传样本
+├── 活动上传测试数据_300人.csv      # 虚构规模测试样本
 ├── requirements.txt
 └── README.md
 ```
 
-working CSV、复盘草稿、临时写入文件、`.venv`、缓存和本地运行日志不提交 Git，由 `.gitignore` 排除。
+working CSV、复盘草稿、根目录默认命名的下载复盘/跟进表、临时写入文件、`.venv`、缓存和本地运行日志不提交 Git，由 `.gitignore` 排除。
 
 ## 验证
+
+2026-10-07 提交前验证：**86 项自动测试全部通过（原有 57 + 上传 23 + 启动器 6）**，`pip check` 通过。上传测试使用内存 CSV 和真实 XLSX 文件字节，覆盖中英文列名、最小字段、布尔/数字到场值、GB18030、自动编号、缺失字段、重复列/编号、损坏文件、公式单元格、首工作表、限制、模板、扩展分类统计、缺失事实说明，以及页面确认、四页联动、两位上传访问者隔离、Local 模式上传不落盘、切换/替换时草稿隔离、最新导出和公式文本处理。Streamlit AppTest 的文件入口以真实 BytesIO 替代文件选择器，其余解析、校验、保存和页面逻辑均执行实际代码。
+
+此前浏览器上传操作曾受自动化工具网络错误阻断，后续已完成 20 条 CSV 的真实浏览器上传、校验、预览、确认和页面切换，用户也已确认启动修复后的本地体验正常。XLSX 已通过解析和页面自动测试，未将其记作人工浏览器上传验收。300 人 CSV 已核对解析、统计、跟进名单及复盘生成；原始 Demo CSV 的 SHA256 保持 `6bae9989b305c488eecd303cbc7776b3a11d60e7b7ff6f1ab127f4eeb9cea7e3`。本次公开提交范围与隐私检查见 [上传功能提交检查](docs/UPLOAD_RELEASE_CHECK.md)。
 
 在项目根目录执行：
 
@@ -223,12 +284,12 @@ V1.0 收尾验证：**54 项自动测试通过（原有 47 + 新增 7）**。覆
 
 `pip check` 和 Linux Python 3.12 安装预检通过：38 项直接 / 间接依赖可以解析为现代 x86-64 Linux wheels；本轮未在 Linux 实机或公网运行。当前文件和全部 Git 历史检查未发现需阻止公开的敏感内容，本地生成文件不属于提交范围。详细范围与证据见 [V1.0 收尾检查记录](docs/V1_RELEASE_CHECK.md)。
 
-V0.3 增加基于数据与人工观察的模板复盘，保留 V0.1 / V0.2 功能。不包含大模型 API、数据库 / SQL、登录、RAG、Agent、Docker 或预测。没有推送到 GitHub。
+V0.3 增加基于数据与人工观察的模板复盘，保留 V0.1 / V0.2 功能。不包含大模型 API、数据库 / SQL、登录、RAG、Agent、Docker 或预测。当时仅保存本地 Git；项目现有公开仓库为 [allon-oss/tech-event-assistant](https://github.com/allon-oss/tech-event-assistant)。
 
 V0.3 已保存为本地提交 `2b17279`（`feat: complete v0.3 event review workflow`）。V1.0 仅增加公开演示隔离、部署兼容说明和必要验证，不新增业务页面；经用户确认，以 `chore: prepare v1.0 for public demo` 保存本地 Git。修改功能时同步更新本文的启动步骤、指标口径和验证记录。
 
 独立代码审查：核心流程未发现阻塞问题。审查发现的临时文件清理失败可能覆盖友好保存提示问题，已补充失败复现测试并修复，最终完整测试 27/27 通过。当前无遗留问题；单用户 CSV 与原生编辑器限制如上。
 
-`.gitignore` 排除 `.env*`、working CSV、复盘草稿、虚拟环境、缓存、日志、临时文件和本地配置目录；只保留 `.streamlit/config.toml` 共用主题与本地监听配置。未创建 GitHub 远程仓库，未推送或部署。
+`.gitignore` 排除 `.env*`、working CSV、复盘草稿、默认命名的下载复盘/跟进表、虚拟环境、缓存、日志、临时文件和本地配置目录；只保留 `.streamlit/config.toml` 共用主题与本地监听配置。代码仓库公开不等于应用已部署，本轮仅更新代码仓库，未新增公网应用部署。
 
 `.gitattributes` 禁止 Git 自动转换原始 Demo CSV 的换行，保留已验证的文件字节与 SHA256。

@@ -19,13 +19,20 @@ TABLE_LABELS = {
 }
 
 
-def display_followups(df: pd.DataFrame) -> pd.DataFrame:
+def display_followups(df: pd.DataFrame, *, demo_aliases=True) -> pd.DataFrame:
     display = df[list(TABLE_LABELS)].rename(columns=TABLE_LABELS).copy()
-    display['跟进负责人'] = display['跟进负责人'].replace(OWNER_DISPLAY_NAMES)
+    if demo_aliases:
+        display['跟进负责人'] = display['跟进负责人'].replace(OWNER_DISPLAY_NAMES)
     return display
 
 
 class FollowupStore:
+    def _validate(self, data):
+        return validate_data(data)
+
+    def _baseline(self):
+        return load_data(self.demo_path)
+
     def __init__(self, demo_path=None, working_path=None):
         self.demo_path = Path(demo_path) if demo_path is not None else DEFAULT_DATA_PATH
         self.working_path = Path(working_path) if working_path is not None else DEFAULT_WORKING_PATH
@@ -87,8 +94,8 @@ class FollowupStore:
         indexed.loc[edits.index, list(EDITABLE_COLUMNS)] = edits[list(EDITABLE_COLUMNS)]
         # Keep baseline ordering and every registration; never write just the filtered list.
         merged = indexed.reset_index()[list(REQUIRED_COLUMNS)]
-        merged = validate_data(merged)
-        self._check_baseline(merged, load_data(self.demo_path))
+        merged = self._validate(merged)
+        self._check_baseline(merged, self._baseline())
         self._save_data(merged, revision)
 
     def _save_data(self, merged: pd.DataFrame, revision: str) -> None:

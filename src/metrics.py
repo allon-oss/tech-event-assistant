@@ -23,6 +23,7 @@ def calculate_kpis(df: pd.DataFrame) -> dict[str, int | float]:
 
 
 def _distribution(df: pd.DataFrame, column: str, categories: tuple) -> pd.DataFrame:
+    categories = list(categories) + [v for v in df[column].unique() if v and v not in categories]
     counts = df[column].value_counts().reindex(categories, fill_value=0)
     return counts.rename_axis(column).reset_index(name='count')
 
@@ -36,8 +37,9 @@ def field_distribution(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def channel_performance(df: pd.DataFrame) -> pd.DataFrame:
-    registered = df.groupby('registration_channel').size().reindex(CHANNELS, fill_value=0)
-    attended = df[df.attended.eq('是')].groupby('registration_channel').size().reindex(CHANNELS, fill_value=0)
+    channels = list(CHANNELS) + [v for v in df.registration_channel.unique() if v and v not in CHANNELS]
+    registered = df.groupby('registration_channel').size().reindex(channels, fill_value=0)
+    attended = df[df.attended.eq('是')].groupby('registration_channel').size().reindex(channels, fill_value=0)
     result = pd.DataFrame({'registered': registered, 'attended': attended})
     result['attendance_rate'] = attended.div(registered.where(registered.ne(0))).fillna(0.0)
     return result.rename_axis('registration_channel').reset_index()

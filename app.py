@@ -15,6 +15,8 @@ from src.followup_store import FollowupStore, OWNER_DISPLAY_NAMES, TABLE_LABELS,
 from src.review_page import render_review_page
 from src.app_mode import get_app_mode
 from src.session_store import SessionFollowupStore, SessionReviewStore
+from src.upload_page import render_data_source
+from src.upload_session import UploadFollowupStore
 
 
 def restore_controls(store):
@@ -52,22 +54,27 @@ st.sidebar.title('活动工作台')
 st.sidebar.caption('创业者交流 · V1.0 作品集 Demo')
 page = st.sidebar.radio('页面', ['活动总览', '活动观察', '关系跟进', '活动复盘'], key='page')
 st.sidebar.divider()
-st.sidebar.caption('Synthetic Demo Data\n\n' + ('Demo Mode · 当前会话' if is_demo else 'Local Mode · 本地保存'))
 
 st.title('科技创业活动观察与跟进助手')
 st.markdown('从报名与签到数据中快速观察活动表现，并沉淀后续关系跟进。')
-st.info('作品集 Demo · Synthetic Demo Data：人物、公司和项目均为虚构，没有真实客户数据。')
-if is_demo:
+upload_workspace = render_data_source()
+is_upload = upload_workspace is not None
+st.sidebar.caption('用户上传数据 · 当前会话' if is_upload else
+                   'Synthetic Demo Data\n\n' + ('Demo Mode · 当前会话' if is_demo else 'Local Mode · 本地保存'))
+if not is_upload:
+    st.info('作品集 Demo · Synthetic Demo Data：人物、公司和项目均为虚构，没有真实客户数据。')
+if is_demo and not is_upload:
     st.caption('演示修改仅保存在你的当前会话，其他访问者不可见。刷新、断开会话或服务重启后会重置，请及时下载需要保留的内容。')
 
 try:
-    store = SessionFollowupStore(st.session_state) if is_demo else FollowupStore()
+    store = (UploadFollowupStore(upload_workspace) if is_upload else
+             SessionFollowupStore(st.session_state) if is_demo else FollowupStore())
     data, revision = store.load()
 except DataValidationError as error:
     st.error(str(error))
     st.caption('演示数据暂时不可用，请稍后刷新。' if is_demo
                else '请修正本地 CSV 后刷新页面。字段说明见 data/DATA_DICTIONARY.md。')
-    if not is_demo:
+    if not is_demo and not is_upload:
         restore_controls(store)
     st.stop()
 
@@ -117,10 +124,12 @@ elif page == '关系跟进':
         column.metric(label, count, border=True)
     first, second, third = st.columns(3)
     status = first.selectbox('跟进状态', ['全部', *EDITABLE_STATUSES], key='status_filter')
-    role = second.selectbox('身份', ['全部', *ROLES], key='role_filter')
+    roles = list(dict.fromkeys([*ROLES, *data.role.tolist()])) if is_upload else ROLES
+    owners = sorted(set(data.followup_owner) - {''}) if is_upload else OWNERS
+    role = second.selectbox('身份', ['全部', *roles], key='role_filter')
     owner = third.selectbox(
-        '负责人', ['全部', *OWNERS, '无当前负责人'], key='owner_filter',
-        format_func=lambda value: OWNER_DISPLAY_NAMES.get(value, value),
+        '负责人', ['全部', *owners, '无当前负责人'], key='owner_filter',
+        format_func=lambda value: value if is_upload else OWNER_DISPLAY_NAMES.get(value, value),
     )
     followups = get_followups(
         data, status=None if status == '全部' else status,
@@ -132,7 +141,7 @@ elif page == '关系跟进':
     if followups.empty:
         st.info('没有符合当前筛选条件的对象，请调整跟进状态、身份或负责人。')
     else:
-        display = display_followups(followups).reset_index(drop=True)
+        display = display_followups(followups, demo_aliases=not is_upload).reset_index(drop=True)
         signature = repr((revision, status, role, owner, st.session_state.get('editor_generation', 0)))
         editor_key = 'followup_editor_' + hashlib.sha256(signature.encode()).hexdigest()[:20]
         st.session_state['active_editor_key'] = editor_key
@@ -143,16 +152,18 @@ elif page == '关系跟进':
                 column_config={
                     '报名编号':st.column_config.TextColumn(width='small', pinned=True),
                     '姓名':st.column_config.TextColumn(width='small', pinned=True),
-                    '当前跟进状态':st.column_config.SelectboxColumn(options=list(EDITABLE_STATUSES), required=True, width='medium'),
-                    '跟进负责人':st.column_config.SelectboxColumn(options=['', *[OWNER_DISPLAY_NAMES.get(o,o) for o in OWNERS]], width='small'),
-                    '下一步动作':st.column_config.TextColumn(width='medium', required=True),
+                    '当前跟进状态':st.column_config.SelectboxColumn(options=([''] if is_upload else []) + list(EDITABLE_STATUSES), required=not is_upload, width='medium'),
+                    '跟进负责人': (st.column_config.TextColumn(width='small') if is_upload else
+                                  st.column_config.SelectboxColumn(options=['', *[OWNER_DISPLAY_NAMES.get(o,o) for o in OWNERS]], width='small')),
+                    '下一步动作':st.column_config.TextColumn(width='medium', required=not is_upload),
                     '备注':st.column_config.TextColumn(width='large'),
                 },
             )
             save = st.form_submit_button('保存修改', key='save_changes', type='primary')
         if save:
             candidate = edited.rename(columns={label:key for key,label in TABLE_LABELS.items()}).copy()
-            candidate['followup_owner'] = candidate['followup_owner'].replace({v:k for k,v in OWNER_DISPLAY_NAMES.items()})
+            if not is_upload:
+                candidate['followup_owner'] = candidate['followup_owner'].replace({v:k for k,v in OWNER_DISPLAY_NAMES.items()})
             try:
                 store.save_edits(data, candidate, revision)
                 st.session_state['editor_generation'] = st.session_state.get('editor_generation', 0) + 1
@@ -168,10 +179,13 @@ elif page == '关系跟进':
                            mime='text/csv', key='export_followups')
     except DataValidationError as error:
         st.error(str(error))
-    restore_controls(store)
+    if not is_upload:
+        restore_controls(store)
 
 elif page == '活动复盘':
     render_review_page(
-        data, revision, '当前会话数据（原始 Synthetic Demo CSV）' if is_demo else store.current_path(),
-        review_store=SessionReviewStore(st.session_state) if is_demo else None, is_demo=is_demo,
+        data, revision, store.current_path() if is_upload else
+        '当前会话数据（原始 Synthetic Demo CSV）' if is_demo else store.current_path(),
+        review_store=(SessionReviewStore(upload_workspace) if is_upload else
+                      SessionReviewStore(st.session_state) if is_demo else None), is_demo=is_demo or is_upload,
     )

@@ -31,6 +31,9 @@ __pycache__/
 htmlcov/
 data/demo_tech_event_working.csv
 data/event_review_draft.md
+# Browser downloads may contain user-provided participant data or observations.
+/*_活动复盘*.md
+/*_最新跟进表*.csv
 *.tmp
 *.temp
 *.bak

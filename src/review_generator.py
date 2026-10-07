@@ -45,6 +45,9 @@ def summarize_review(data: pd.DataFrame) -> dict:
         'highest_attendance': leaders('attendance_rate'),
         'lowest_attendance': leaders('attendance_rate', highest=False),
         'progress': followup_progress(data), 'paused': paused,
+        'missing_fields': int(data.field.eq('').sum()),
+        'missing_intents': int((data.attended.eq('是') & data.connection_intent.eq('')).sum()),
+        'missing_statuses': int((valuable_mask(data) & data.followup_status.eq('')).sum()),
     }
 
 
@@ -112,6 +115,8 @@ def _generate_template_review(summary: dict, human: dict) -> str:
         field_text = '、'.join(f'{r.field} {r.count} 人' for r in fields.itertuples())
         lines.extend([f'人数最多的 {len(fields)} 个关注方向：{field_text}。',
                       '方向按人数降序取前三名；并列时按活动观察页的方向顺序展示。'])
+    if summary['missing_fields']:
+        lines.append(f'另有 {summary["missing_fields"]} 人未填写关注方向，不参与方向排名。')
     lines.extend(['', '**数据事实 · 渠道表现**', ''])
     for row in summary['channels'].itertuples():
         rate = format_rate(row.attendance_rate) if row.registered else '暂无（无报名）'
@@ -126,6 +131,10 @@ def _generate_template_review(summary: dict, human: dict) -> str:
         progress += f'、暂不跟进 {summary["paused"]} 人'
     lines.extend([f'当前进度：{progress}。',
                   '明确对接价值按已到场且有投资、创业者、合作伙伴或人才对接意向统计；已完成对接表示介绍动作完成。'])
+    if summary['missing_intents']:
+        lines.append(f'到场者中有 {summary["missing_intents"]} 人未填写对接意向，无法据此判断其是否有对接需求。')
+    if summary['missing_statuses']:
+        lines.append(f'明确对接意向对象中有 {summary["missing_statuses"]} 人未填写跟进状态，未计入上述进度。')
     if human['key_relationships']:
         lines.extend(['', '**人工补充 · 重点关系**', '', human['key_relationships']])
     lines.extend(['', '## 4. 活动亮点与问题', ''])
@@ -141,7 +150,9 @@ def _generate_template_review(summary: dict, human: dict) -> str:
         lines.append(f'- 继续推进已初步建联 {summary["progress"]["已初步建联"]} 人与跟进中 '
                      f'{summary["progress"]["跟进中"]} 人的既有对接任务。')
     if not any(summary['progress'][s] for s in ['待跟进', '已初步建联', '跟进中']):
-        lines.append('- 当前没有待跟进、已初步建联或跟进中的任务；按后续新增需求更新跟进表。')
+        lines.append('- 当前已填写的状态中没有待跟进、已初步建联或跟进中的任务；按后续新增需求更新跟进表。')
+    if summary['missing_intents'] or summary['missing_statuses']:
+        lines.append('- 请先核实未填写的对接意向或跟进状态，再判断是否需要安排跟进。')
     if human['key_relationships']:
         lines.append('- 按第 3 节人工补充的重点关系逐项确认下一步。')
     if human['improvements']:
