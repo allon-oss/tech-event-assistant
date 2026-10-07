@@ -45,8 +45,8 @@ def render_review_page(data, revision, source, review_store=None, is_demo=False)
                ('到场率', format_rate(summary['kpis']['attendance_rate'])),
                ('到场创业者人数', str(summary['kpis']['attended_founders']))]
     for column, (label, value) in zip(st.columns(4), results):
-        column.metric(label, value)
-    with st.expander('人群结构、方向与渠道明细', expanded=True):
+        column.metric(label, value, border=True)
+    with st.expander('人群结构、方向与渠道明细'):
         st.caption('身份占比和前三方向按全部报名者统计；到场创业者按实际到场统计。')
         roles = summary['roles'].rename(columns={'role':'身份', 'count':'报名人数', 'share':'报名占比'}).copy()
         roles['报名占比'] = roles['报名占比'].map(format_rate)
@@ -67,7 +67,7 @@ def render_review_page(data, revision, source, review_store=None, is_demo=False)
             st.write(sentence)
     st.metric('明确对接价值人数', summary['kpis']['valuable_connections'])
     for column, (label, count) in zip(st.columns(4), summary['progress'].items()):
-        column.metric(label, count)
+        column.metric(label, count, border=True)
     if summary['paused']:
         st.caption(f'另有暂不跟进 {summary["paused"]} 人，仍计入明确对接价值总数。')
 
@@ -88,12 +88,16 @@ def render_review_page(data, revision, source, review_store=None, is_demo=False)
     st.divider()
     st.markdown('### 2. 人工补充')
     st.caption('以下均为可选人工观察。输入不会写回 CSV；本次会话保留输入，刷新后需重新填写。保存的草稿会保留已整合的文字。')
-    for field, (label, placeholder) in OBSERVATION_FIELDS.items():
+    for index, (field, (label, placeholder)) in enumerate(OBSERVATION_FIELDS.items()):
+        if index < 4 and index % 2 == 0:
+            observation_columns = st.columns(2, gap='medium')
         key = 'review_' + field
         if key not in st.session_state:
             st.session_state[key] = st.session_state['review_observations'][field]
-        st.text_area(label, key=key, height=100, placeholder=placeholder,
-                     on_change=_remember_observation, args=(field,))
+        # The last, action-oriented field gets the full width below the pairs.
+        target = observation_columns[index % 2] if index < 4 else st
+        target.text_area(label, key=key, height=120, placeholder=placeholder,
+                         on_change=_remember_observation, args=(field,))
     if st.button('生成复盘草稿', key='generate_review', type='primary'):
         if st.session_state['review_draft'].strip():
             st.session_state['review_confirm_regenerate'] = True

@@ -210,6 +210,78 @@ class UploadPageTests(unittest.TestCase):
             self.assertTrue(app.error)
             self.assertFalse(app.metric)
 
+    def test_overview_shortcuts_navigate_without_losing_review_inputs(self):
+        app = self.app()
+        for key, page in [('go_observation', '活动观察'), ('go_followup', '关系跟进'),
+                          ('go_review', '活动复盘')]:
+            app.button(key=key).click().run()
+            self.assertFalse(app.exception)
+            self.assertEqual(app.radio(key='page').value, page)
+            if page == '活动观察':
+                self.assertEqual(len(app.get('plotly_chart')), 3)
+            elif page == '关系跟进':
+                self.assertEqual(app.selectbox(key='status_filter').value, '全部')
+            else:
+                app.text_area(key='review_highlights').set_value('模拟人工观察').run()
+                app.text_area(key='review_editor').set_value('待继续编辑的模拟草稿').run()
+            app.radio(key='page').set_value('活动总览').run()
+        app.button(key='go_review').click().run()
+        self.assertEqual(app.text_area(key='review_highlights').value, '模拟人工观察')
+        self.assertEqual(app.text_area(key='review_editor').value, '待继续编辑的模拟草稿')
+        self.assertFalse(app.exception)
+        self.assertFalse(self.draft.exists())
+
+    def test_overview_shortcut_uses_confirmed_upload_and_keeps_visitors_separate(self):
+        first, second = self.app(), self.app()
+        self.confirm(first, uploaded(FOLLOWUP, 'followup.csv'))
+        first.button(key='go_followup').click().run()
+        self.assertEqual(first.radio(key='page').value, '关系跟进')
+        self.assertEqual(len(first.dataframe[0].value), 1)
+        self.assertIn('研究员', first.selectbox(key='role_filter').options)
+        first.radio(key='page').set_value('活动总览').run()
+        first.button(key='go_review').click().run()
+        first.button(key='generate_review').click().run()
+        self.assertIn('1 人报名', first.text_area(key='review_editor').value)
+        second.button(key='go_review').click().run()
+        self.assertEqual(second.text_area(key='review_editor').value, '')
+        self.assertEqual({m.label: m.value for m in second.metric}['报名人数'], '100')
+        self.assertFalse(first.exception)
+        self.assertFalse(second.exception)
+        self.assertFalse(self.working.exists())
+        self.assertFalse(self.draft.exists())
+        self.assertEqual(DEFAULT_DATA_PATH.read_bytes(), self.baseline)
+
+    def test_nontech_upload_charts_filters_and_review_use_actual_categories(self):
+        content = ('姓名,身份,报名渠道,是否到场,创业行业 / 关注方向,对接意向\n'
+                   '测试店主,创业者,商会,是,餐饮 / 食品,寻找合作伙伴\n'
+                   '测试顾问,品牌顾问,线下邀约,是,专业服务,行业交流\n')
+        app = self.app()
+        with patch('streamlit.file_uploader', return_value=uploaded(content)):
+            app.radio(key='data_source').set_value('上传自己的数据').run()
+            app.button(key='confirm_upload').click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual({m.label: m.value for m in app.metric}['明确对接价值人数'], '1')
+        app.radio(key='page').set_value('活动观察').run()
+        import json
+        charts = app.get('plotly_chart')
+        roles = json.loads(charts[0].proto.spec)['data'][0]
+        fields = json.loads(charts[1].proto.spec)['data'][0]
+        self.assertEqual(set(roles['y']), {'创业者', '品牌顾问'})
+        self.assertEqual(set(fields['y']), {'餐饮 / 食品', '专业服务'})
+        app.radio(key='page').set_value('关系跟进').run()
+        self.assertIn('品牌顾问', app.selectbox(key='role_filter').options)
+        self.assertNotIn('科技从业者', app.selectbox(key='role_filter').options)
+        app.radio(key='page').set_value('活动复盘').run()
+        app.button(key='generate_review').click().run()
+        draft = app.text_area(key='review_editor').value
+        self.assertIn('餐饮 / 食品 1 人', draft)
+        self.assertIn('专业服务 1 人', draft)
+        self.assertNotIn('AI Agent', draft)
+        self.assertFalse(app.exception)
+        self.assertFalse(self.working.exists())
+        self.assertFalse(self.draft.exists())
+        self.assertEqual(DEFAULT_DATA_PATH.read_bytes(), self.baseline)
+
     def test_two_uploaded_visitors_replacement_and_new_session_reset(self):
         first, second = self.app(), self.app()
         self.confirm(first, uploaded())

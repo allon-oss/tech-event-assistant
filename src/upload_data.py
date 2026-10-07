@@ -16,7 +16,7 @@ MAX_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 10_000
 MAX_COLUMNS = 100
 LABELS = dict(zip(REQUIRED_COLUMNS, (
-    '报名编号', '姓名', '身份', '公司 / 项目', '项目阶段', '方向', '报名渠道',
+    '报名编号', '姓名', '身份', '公司 / 项目', '项目阶段', '创业行业 / 关注方向', '报名渠道',
     '是否到场', '对接意向', '当前跟进状态', '跟进负责人', '下一步动作', '备注',
 )))
 ALIASES = {label: column for column, label in LABELS.items()}
@@ -27,6 +27,7 @@ ALIASES.update({
     '公司': 'organization', '机构': 'organization', '公司/项目': 'organization',
     '公司名称': 'organization', '公司/机构': 'organization', '公司 / 机构': 'organization',
     '创业阶段': 'startup_stage', '创业方向': 'field', '关注方向': 'field',
+    '方向': 'field', '创业行业': 'field', '行业方向': 'field', '所属行业': 'field',
     '行业': 'field', '渠道': 'registration_channel', '来源渠道': 'registration_channel',
     '报名来源': 'registration_channel', '到场': 'attended', '签到': 'attended',
     '是否签到': 'attended', '到场状态': 'attended', '签到状态': 'attended',

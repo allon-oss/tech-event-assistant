@@ -17,6 +17,7 @@ from src.app_mode import get_app_mode
 from src.session_store import SessionFollowupStore, SessionReviewStore
 from src.upload_page import render_data_source
 from src.upload_session import UploadFollowupStore
+from src.ui import apply_theme, render_brand, render_overview, render_workspace_header
 
 
 def restore_controls(store):
@@ -41,7 +42,8 @@ def restore_controls(store):
             del st.session_state['restore_revision']
             st.rerun()
 
-st.set_page_config(page_title='科技创业活动观察与跟进助手', page_icon='📋', layout='wide')
+st.set_page_config(page_title='创业活动观察与跟进助手', page_icon='🌱', layout='wide')
+apply_theme()
 
 try:
     mode = get_app_mode()
@@ -50,21 +52,22 @@ except DataValidationError as error:
     st.stop()
 is_demo = mode == 'demo'
 
-st.sidebar.title('活动工作台')
-st.sidebar.caption('创业者交流 · V1.0 作品集 Demo')
-page = st.sidebar.radio('页面', ['活动总览', '活动观察', '关系跟进', '活动复盘'], key='page')
+render_brand()
+page = st.sidebar.radio('页面', ['活动总览', '活动观察', '关系跟进', '活动复盘'], key='page', width='stretch')
 st.sidebar.divider()
 
-st.title('科技创业活动观察与跟进助手')
-st.markdown('从报名与签到数据中快速观察活动表现，并沉淀后续关系跟进。')
+render_workspace_header(page)
 upload_workspace = render_data_source()
 is_upload = upload_workspace is not None
 st.sidebar.caption('用户上传数据 · 当前会话' if is_upload else
                    'Synthetic Demo Data\n\n' + ('Demo Mode · 当前会话' if is_demo else 'Local Mode · 本地保存'))
 if not is_upload:
-    st.info('作品集 Demo · Synthetic Demo Data：人物、公司和项目均为虚构，没有真实客户数据。')
-if is_demo and not is_upload:
-    st.caption('演示修改仅保存在你的当前会话，其他访问者不可见。刷新、断开会话或服务重启后会重置，请及时下载需要保留的内容。')
+    with st.container(key='demo_notice'):
+        st.info('Synthetic Demo Data · 人物、公司和项目均为虚构，没有真实客户数据。')
+    with st.sidebar.expander('关于演示数据'):
+        st.caption('当前演示为科技创业交流示例；餐饮、零售、电商、文创、专业服务等创业活动也可上传数据分析。')
+        if is_demo:
+            st.caption('演示修改仅保存在你的当前会话，其他访问者不可见。刷新、断开会话或服务重启后会重置，请及时下载需要保留的内容。')
 
 try:
     store = (UploadFollowupStore(upload_workspace) if is_upload else
@@ -82,40 +85,31 @@ if 'feedback' in st.session_state:
     st.success(st.session_state.pop('feedback'))
 
 if page == '活动总览':
-    st.subheader('活动总览')
-    st.caption('创业者交流 · 以下指标均基于完整报名与签到记录')
     kpis = calculate_kpis(data)
-    cards = [
-        ('报名人数', str(kpis['registered']), '全部有效报名记录。'),
-        ('到场人数', str(kpis['attended']), '是否到场为「是」的人数。'),
-        ('到场率', f"{kpis['attendance_rate']:.0%}", '到场人数 ÷ 报名人数。'),
-        ('到场创业者人数', str(kpis['attended_founders']), '身份为创业者且实际到场的人数。'),
-        ('明确对接价值人数', str(kpis['valuable_connections']), '已到场，且希望寻找投资、创业者、合作伙伴或招聘人才。含已完成对接。'),
-        ('待跟进人数', str(kpis['pending_followups']), '有明确对接价值且状态为「待跟进」的人数。'),
-    ]
-    for offset in (0, 3):
-        for column, (label, value, help_text) in zip(st.columns(3), cards[offset:offset+3]):
-            column.metric(label, value, help=help_text, border=True)
-    st.divider()
-    st.markdown('**继续观察与行动**')
-    st.write('在「活动观察」查看参与者结构与渠道表现；在「关系跟进」筛选对象、编辑并保存下一步动作。')
+    render_overview(kpis)
     with st.expander('统计口径'):
         st.write('明确对接价值 = 已到场，且对接意向属于寻找投资、寻找创业者、寻找合作伙伴、招聘 / 人才。')
         st.write('行业交流和暂无明确需求不计入明确对接价值；已完成对接表示介绍动作完成，不代表融资、合作或招聘成交。')
 
 elif page == '活动观察':
     st.subheader('活动观察')
-    st.caption('身份和方向按全部报名者统计；渠道到场率 = 该渠道到场人数 ÷ 该渠道报名人数。')
+    st.caption('身份、创业行业 / 关注方向按全部报名者统计；渠道到场率 = 该渠道到场人数 ÷ 该渠道报名人数。')
+    role_counts = role_distribution(data)
+    field_counts = field_distribution(data)
+    if is_upload:
+        role_counts = role_counts[role_counts['count'].gt(0)]
+        field_counts = field_counts[field_counts['count'].gt(0)]
     left, right = st.columns(2, gap='large')
-    with left:
+    with left, st.container(key='chart_roles'):
         st.markdown('#### 参与者身份构成')
-        st.plotly_chart(role_chart(role_distribution(data)), width='stretch', key='roles', config={'displayModeBar': False})
-    with right:
-        st.markdown('#### 创业 / 关注方向分布')
-        st.plotly_chart(field_chart(field_distribution(data)), width='stretch', key='fields', config={'displayModeBar': False})
-    st.markdown('#### 报名渠道表现')
-    st.caption('蓝色柱形读左轴人数，棕色折线读右轴到场率；渠道应同时比较规模与到场表现。')
-    st.plotly_chart(channel_chart(channel_performance(data)), width='stretch', key='channels', config={'displayModeBar': False})
+        st.plotly_chart(role_chart(role_counts), width='stretch', key='roles', config={'displayModeBar': False})
+    with right, st.container(key='chart_fields'):
+        st.markdown('#### 创业行业 / 关注方向分布')
+        st.plotly_chart(field_chart(field_counts), width='stretch', key='fields', config={'displayModeBar': False})
+    with st.container(key='chart_channels'):
+        st.markdown('#### 报名渠道表现')
+        st.caption('绿色柱形读左轴人数，橙色折线读右轴到场率；渠道应同时比较规模与到场表现。')
+        st.plotly_chart(channel_chart(channel_performance(data)), width='stretch', key='channels', config={'displayModeBar': False})
 
 elif page == '关系跟进':
     st.subheader('关系跟进')
@@ -124,7 +118,7 @@ elif page == '关系跟进':
         column.metric(label, count, border=True)
     first, second, third = st.columns(3)
     status = first.selectbox('跟进状态', ['全部', *EDITABLE_STATUSES], key='status_filter')
-    roles = list(dict.fromkeys([*ROLES, *data.role.tolist()])) if is_upload else ROLES
+    roles = list(dict.fromkeys(data.role.tolist())) if is_upload else ROLES
     owners = sorted(set(data.followup_owner) - {''}) if is_upload else OWNERS
     role = second.selectbox('身份', ['全部', *roles], key='role_filter')
     owner = third.selectbox(

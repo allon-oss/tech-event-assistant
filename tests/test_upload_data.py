@@ -61,6 +61,18 @@ class UploadDataTests(unittest.TestCase):
                 self.assertEqual(self.parse('姓名,身份,报名渠道,是否到场\n甲,其他,网站,' + value).attended[0], expected)
         self.assertEqual(self.parse(CSV.encode('gb18030')).name[0], '测试甲')
 
+    def test_industry_headers_preserve_nontech_fields_in_csv_and_xlsx(self):
+        for label in ['field', '方向', '行业', '创业行业', '行业方向', '所属行业', '创业行业 / 关注方向']:
+            with self.subTest(label=label):
+                headers = ['姓名', '身份', '报名渠道', '是否到场', label]
+                row = ['测试店主', '品牌主理人', '商会', '是', '餐饮 / 食品']
+                csv_data = self.parse(','.join(headers) + '\n' + ','.join(row))
+                excel_data = self.parse(xlsx_bytes([headers, row]), '名单.xlsx')
+                self.assertEqual(csv_data.field.tolist(), ['餐饮 / 食品'])
+                pd.testing.assert_frame_equal(csv_data, excel_data)
+        with self.assertRaises(data_loader.DataValidationError):
+            self.parse('姓名,身份,报名渠道,是否到场,方向,创业行业\n甲,创业者,商会,是,餐饮,零售')
+
     def test_missing_required_columns_and_cells_are_rejected(self):
         for content in ['姓名,身份,报名渠道\n甲,其他,网站',
                         '姓名,身份,报名渠道,是否到场\n ,其他,网站,是',

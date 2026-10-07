@@ -10,9 +10,10 @@ from src.upload_session import confirm_upload, switch_context
 
 def render_data_source():
     """Return confirmed upload workspace, or None for the original Demo flow."""
-    source = st.sidebar.radio('数据来源', ['使用演示数据', '上传自己的数据'], key='data_source')
+    source = st.sidebar.radio('数据来源', ['使用演示数据', '上传自己的数据'],
+                              key='data_source', width='stretch')
     st.sidebar.download_button('下载数据模板', template_csv(), file_name='活动数据模板.csv',
-                               mime='text/csv', key='download_data_template')
+                               mime='text/csv', key='download_data_template', width='stretch')
     if source == '使用演示数据':
         switch_context(st.session_state, 'demo')
         return None
@@ -20,10 +21,11 @@ def render_data_source():
     st.sidebar.caption('仅当前会话可见，不写入项目文件。断开会话或重启后无法恢复，请下载保留。')
     with st.sidebar:
         file = st.file_uploader('上传 CSV / XLSX', type=['csv', 'xlsx'], key='event_upload', max_upload_size=5)
-    st.caption('必填：姓名、身份、报名渠道、是否到场。支持英文或常见中文列名；'
-               '是否到场支持是/否、true/false、1/0、已签到/未签到。'
-               'XLSX 读取第一个工作表，最多 5 MB、10,000 条记录。')
-    st.caption('模板只有表头；报名编号留空会自动生成，其余可选字段留空即可。未知列不参与分析。')
+    with st.expander('上传要求与字段说明', expanded='_upload_workspace' not in st.session_state):
+        st.caption('必填：姓名、身份、报名渠道、是否到场。支持英文或常见中文列名；'
+                   '是否到场支持是/否、true/false、1/0、已签到/未签到。'
+                   'XLSX 读取第一个工作表，最多 5 MB、10,000 条记录。')
+        st.caption('模板只有表头；报名编号留空会自动生成，其余可选字段留空即可。身份与创业行业 / 关注方向可自行填写，例如品牌主理人、餐饮 / 食品、电商。未知列不参与分析。')
     if file is None:
         st.session_state.pop('_pending_upload', None)
     else:

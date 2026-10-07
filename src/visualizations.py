@@ -3,26 +3,26 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-BLUE = '#376983'
-AMBER = '#B66B24'
+GREEN = '#35634B'
+ORANGE = '#B9502D'
 
 
 def _style(fig: go.Figure, height: int) -> go.Figure:
     fig.update_layout(
         template='plotly_white', height=height,
         margin=dict(l=10, r=15, t=25, b=20),
-        font=dict(family='Microsoft YaHei, Arial, sans-serif', size=13, color='#233344'),
+        font=dict(family='Microsoft YaHei, Arial, sans-serif', size=13, color='#203D32'),
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
     )
     fig.update_xaxes(showgrid=False, zeroline=False)
-    fig.update_yaxes(gridcolor='#EDF0F3', zeroline=False)
+    fig.update_yaxes(gridcolor='#E0E4D9', zeroline=False)
     return fig
 
 
 def _count_chart(summary: pd.DataFrame, category: str) -> go.Figure:
     fig = go.Figure(go.Bar(
         x=summary['count'].tolist(), y=summary[category].tolist(), orientation='h',
-        marker_color=BLUE, text=summary['count'].tolist(), textposition='outside',
+        marker_color=GREEN, text=summary['count'].tolist(), textposition='outside',
         cliponaxis=False, hovertemplate='%{y}<br>报名人数：%{x} 人<extra></extra>',
     ))
     fig.update_layout(showlegend=False)
@@ -44,13 +44,14 @@ def channel_chart(summary: pd.DataFrame) -> go.Figure:
     channels = summary['registration_channel'].tolist()
     fig.add_trace(go.Bar(
         x=channels, y=summary['registered'].tolist(), name='报名人数（左轴）',
-        marker_color=BLUE, text=summary['registered'].tolist(), textposition='outside',
+        # Lighter columns keep rate labels readable when the two axes overlap.
+        marker_color='#ADC3A9', text=summary['registered'].tolist(), textposition='outside',
         customdata=summary['attended'].tolist(),
         hovertemplate='%{x}<br>报名：%{y} 人<br>到场：%{customdata} 人<extra></extra>',
     ), secondary_y=False)
     fig.add_trace(go.Scatter(
         x=channels, y=summary['attendance_rate'].tolist(), name='到场率（右轴）',
-        mode='lines+markers+text', marker=dict(size=9), line=dict(color=AMBER, width=2),
+        mode='lines+markers+text', marker=dict(size=9), line=dict(color=ORANGE, width=2),
         text=[f'{rate:.1%}' for rate in summary['attendance_rate']], textposition='top center',
         hovertemplate='%{x}<br>到场率：%{y:.1%}<extra></extra>',
     ), secondary_y=True)
